@@ -1,0 +1,37 @@
+*{
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html,body{
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.scene{
+    position: fixed;
+    top: 0;
+    left: 0%;
+    outline: none;
+}
+
+
+.point{
+    text-align: center;
+    display: none;
+    flex-direction: column;
+    justify-content: space-around;
+    align-items: center;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 200px;
+    height: 200px;
+    background-color: #00000055;
+    color: #ffff;
+}
+
+
+
