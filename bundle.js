@@ -56017,7 +56017,13 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var three__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(2);
 /* harmony import */ var three_examples_jsm_loaders_GLTFLoader_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3);
 /* harmony import */ var three_examples_jsm_controls_OrbitControls_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4);
-
+function _createForOfIteratorHelper(o, allowArrayLike) { var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"]; if (!it) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e) { throw _e; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = it.call(o); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e2) { didErr = true; err = _e2; }, f: function f() { try { if (!normalCompletion && it["return"] != null) it["return"](); } finally { if (didErr) throw err; } } }; }
+function _toConsumableArray(arr) { return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread(); }
+function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
+function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o === "string") return _arrayLikeToArray(o, minLen); var n = Object.prototype.toString.call(o).slice(8, -1); if (n === "Object" && o.constructor) n = o.constructor.name; if (n === "Map" || n === "Set") return Array.from(o); if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen); }
+function _iterableToArray(iter) { if (typeof Symbol !== "undefined" && iter[Symbol.iterator] != null || iter["@@iterator"] != null) return Array.from(iter); }
+function _arrayWithoutHoles(arr) { if (Array.isArray(arr)) return _arrayLikeToArray(arr); }
+function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
 
 
 
@@ -56033,10 +56039,46 @@ scene.fog = new three__WEBPACK_IMPORTED_MODULE_1__.Fog(0x182857, 5, 8);
 //MODELS
 
 var gltfLoader = new three_examples_jsm_loaders_GLTFLoader_js__WEBPACK_IMPORTED_MODULE_2__.GLTFLoader();
-gltfLoader.load('./models/altar5.glb', function (gltf) {
-  gltf.scene.castShadow = true;
-  gltf.scene.position.set(0, -0.8, 0);
-  scene.add(gltf.scene);
+gltfLoader.load('./models/base.glb', function (gltf) {
+  var base = gltf.scene;
+  base.castShadow = true;
+  base.receiveShadow = true;
+  base.position.set(0, -1, 0);
+  var children = _toConsumableArray(base.children);
+  console.log(children);
+  var _iterator = _createForOfIteratorHelper(children),
+    _step;
+  try {
+    for (_iterator.s(); !(_step = _iterator.n()).done;) {
+      var child = _step.value;
+      child.receiveShadow = true;
+    }
+  } catch (err) {
+    _iterator.e(err);
+  } finally {
+    _iterator.f();
+  }
+  scene.add(base);
+});
+gltfLoader.load('./models/objects.glb', function (gltf) {
+  var objects = gltf.scene;
+  objects.castShadow = true;
+  objects.receiveShadow = true;
+  objects.position.set(0, -1, 0);
+  var children = _toConsumableArray(objects.children);
+  var _iterator2 = _createForOfIteratorHelper(children),
+    _step2;
+  try {
+    for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
+      var child = _step2.value;
+      child.castShadow = true;
+    }
+  } catch (err) {
+    _iterator2.e(err);
+  } finally {
+    _iterator2.f();
+  }
+  scene.add(objects);
 });
 
 //SIZES
@@ -56067,7 +56109,7 @@ scene.add(camera);
 var controls = new three_examples_jsm_controls_OrbitControls_js__WEBPACK_IMPORTED_MODULE_3__.OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
-controls.screenSpacePanning = false;
+controls.screenSpacePanning = true;
 controls.minDistance = 1;
 controls.maxDistance = 5;
 controls.maxPolarAngle = Math.PI / 2;
@@ -56181,15 +56223,29 @@ container.addEventListener('click', function (event) {
 
 //LIGHT
 
-var directionalLight = new three__WEBPACK_IMPORTED_MODULE_1__.DirectionalLight('#fff', 2);
+var directionalLight = new three__WEBPACK_IMPORTED_MODULE_1__.DirectionalLight('#fff', 5);
 directionalLight.castShadow = true;
-directionalLight.shadow.camera.far = 10;
-directionalLight.shadow.mapSize.set(1024, 1024);
-directionalLight.shadow.normalBias = 0.05;
-directionalLight.position.set(2, 3, 3);
+directionalLight.shadow.camera.far = 5;
+directionalLight.shadow.mapSize.width = 512;
+directionalLight.shadow.mapSize.height = 512;
+directionalLight.shadow.bias = 0.005;
+directionalLight.shadow.normalBias = 0.005;
+directionalLight.position.set(1, 1, 2);
 scene.add(directionalLight);
-var hemisphereLight = new three__WEBPACK_IMPORTED_MODULE_1__.HemisphereLight('#fc8803', '#fff', 1);
-scene.add(hemisphereLight);
+
+//const helper = new THREE.CameraHelper( directionalLight.shadow.camera );
+//scene.add( helper );
+
+var orange = new three__WEBPACK_IMPORTED_MODULE_1__.PointLight(0xe6a519, 5, 100);
+orange.position.set(-0.8, 1, 1);
+scene.add(orange);
+var blue = new three__WEBPACK_IMPORTED_MODULE_1__.PointLight(0x136eed, 5, 100);
+blue.position.set(0.8, 0.5, 1);
+scene.add(blue);
+
+// const o_point = new THREE.PointLightHelper(orange,1)
+// const b_point = new THREE.PointLightHelper(blue,1)
+// scene.add(o_point,b_point)
 
 //RENDERER
 
@@ -56201,8 +56257,8 @@ renderer.setSize(sizes.width, sizes.height);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.physicallyCorrectLights = true;
 renderer.outputEncoding = three__WEBPACK_IMPORTED_MODULE_1__.sRGBEncoding;
-renderer.toneMapping = three__WEBPACK_IMPORTED_MODULE_1__.ReinhardToneMapping;
-renderer.toneMappingExposure = 3;
+renderer.toneMapping = three__WEBPACK_IMPORTED_MODULE_1__.CineonToneMapping;
+renderer.toneMappingExposure = 1;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = three__WEBPACK_IMPORTED_MODULE_1__.PCFSoftShadowMap;
 
