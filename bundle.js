@@ -62722,7 +62722,7 @@ scene.fog = new three__WEBPACK_IMPORTED_MODULE_1__.Fog(0x182857, 10, 15);
 //MODELS
 
 var dracoLoader = new three_examples_jsm_loaders_DRACOloader_js__WEBPACK_IMPORTED_MODULE_2__.DRACOLoader();
-dracoLoader.setDecoderPath('/draco/');
+dracoLoader.setDecoderPath('../draco/');
 var gltfLoader = new three_examples_jsm_loaders_GLTFLoader_js__WEBPACK_IMPORTED_MODULE_3__.GLTFLoader();
 gltfLoader.setDRACOLoader(dracoLoader);
 gltfLoader.load('./models/base.glb', function (gltf) {
