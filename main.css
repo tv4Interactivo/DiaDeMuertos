@@ -17,25 +17,70 @@ html,body{
     outline: none;
 }
 
+.instrucciones{
+    position: absolute;
+    z-index: 2;
+    width: 70%;
+    height: 90%;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%,-50%);
+    background: linear-gradient(to top, #dd9f2bfa 0%, #A37A0Dfa 70%);
+    border-radius: 30px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 3rem 1rem;
+}
+
+.header{
+    display: flex;
+    flex-direction: row;
+    align-items:center;
+    justify-content:space-between;
+    width: 100%;
+    padding: 0 4rem;
+}
+
+.inst{
+    display: flex;
+    flex-direction: row;
+}
+
+.inst1{
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-around;
+}
+
+.scroll{
+    width: 30%;
+}
+
 
 .point{
     text-align: center;
-    display: flex;
+    display: none;
+    opacity: 0;
     flex-direction: column;
     justify-content: space-around;
     align-items: center;
     position: fixed;
     bottom: 0%;
-    left: 0%;
-    width: 100%;
+    left: 50%;
+    width: 60%;
     height: 200px;
-    background-color: #A37A0D;
+    background: linear-gradient(to top, #dd9f2b 0%, #A37A0D 70%);
+    /* background-color: #A37A0D; */
     color: #ffff;
     border-top-left-radius: 30px;
     border-top-right-radius: 30px;
     font-family: 'M PLUS Rounded 1c', sans-serif;
     z-index: 1;
     padding: 1rem;
+    transform: translate(-50%,200px);
 }
 
 .label{
@@ -55,15 +100,35 @@ html,body{
     height: auto;
 }
 
+.button-i{
+    background: none;
+    color:#423204 ;
+    text-decoration: none;
+    font-size: 2rem;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 600;
+    border: none;
+}
+
+.button-i:hover {
+    color: #ba983a
+}
+
+.button-i:active {
+  color: #5d4607;
+}
+
 .button{
     background:#7f6009;
     border: none;
-    border-radius: 10px;
+    border-radius: 20px;
     color: white;
-    padding: 0.5rem 1.5rem;
+    padding: 0.5rem ;
     text-decoration: none;
-    outline: none;
+    text-align: center;
     font-size: 1.3rem;
+    font-family: 'M PLUS Rounded 1c', sans-serif;
+    font-weight: 600;
 }
 
 .button:hover {background-color: #ba983a}
@@ -73,6 +138,23 @@ html,body{
 }
 
 @media screen and (max-width: 500px){
+
+    .instrucciones{
+        width: 90%;
+        padding: 0;
+        justify-content: space-evenly;
+    }
+
+    .inst{
+        flex-direction: column;
+        justify-content: space-around;
+    }
+
+    .point{
+        width: 100%;
+        left: 0;
+        transform: translate(0,200px);
+    }
     
     .img-logo{
         position: absolute;
