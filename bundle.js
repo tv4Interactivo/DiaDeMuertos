@@ -62744,7 +62744,7 @@ gltfLoader.load('./models/base.glb', function (gltf) {
   }
   scene.add(base);
 });
-gltfLoader.load('./models/objetos_draco.gltf', function (gltf) {
+gltfLoader.load('./models/objetos_.glb', function (gltf) {
   var objects = gltf.scene;
   objects.position.set(0, -1, 0);
   gltf.scene.traverse(function (child) {
@@ -62754,7 +62754,7 @@ gltfLoader.load('./models/objetos_draco.gltf', function (gltf) {
   });
   scene.add(objects);
 });
-var piso_g = new three__WEBPACK_IMPORTED_MODULE_1__.PlaneGeometry(50, 50);
+var piso_g = new three__WEBPACK_IMPORTED_MODULE_1__.PlaneGeometry(30, 30);
 var piso_m = new three__WEBPACK_IMPORTED_MODULE_1__.MeshStandardMaterial({
   color: 0x030517
 });
@@ -63267,6 +63267,20 @@ button_i.onclick = function () {
     });
   } else {
     div.style.display = "flex";
+  }
+};
+var button_i = document.querySelector('.btn-info');
+button_i.onclick = function () {
+  var div = document.querySelector('.instrucciones');
+  if (div.style.display !== "flex") {
+    //div.style.display = "none"
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".instrucciones", {
+      duration: 0.5,
+      y: 0,
+      ease: "sine.inOut",
+      "display": "flex",
+      "opacity": "1"
+    });
   }
 };
 var mm = gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.matchMedia();
