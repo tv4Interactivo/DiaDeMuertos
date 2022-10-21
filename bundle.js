@@ -50199,6 +50199,573 @@ if ( typeof window !== 'undefined' ) {
 
 __webpack_require__.r(__webpack_exports__);
 /* harmony export */ __webpack_require__.d(__webpack_exports__, {
+/* harmony export */   "DRACOLoader": () => (/* binding */ DRACOLoader)
+/* harmony export */ });
+/* harmony import */ var three__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2);
+
+
+const _taskCache = new WeakMap();
+
+class DRACOLoader extends three__WEBPACK_IMPORTED_MODULE_0__.Loader {
+
+	constructor( manager ) {
+
+		super( manager );
+
+		this.decoderPath = '';
+		this.decoderConfig = {};
+		this.decoderBinary = null;
+		this.decoderPending = null;
+
+		this.workerLimit = 4;
+		this.workerPool = [];
+		this.workerNextTaskID = 1;
+		this.workerSourceURL = '';
+
+		this.defaultAttributeIDs = {
+			position: 'POSITION',
+			normal: 'NORMAL',
+			color: 'COLOR',
+			uv: 'TEX_COORD'
+		};
+		this.defaultAttributeTypes = {
+			position: 'Float32Array',
+			normal: 'Float32Array',
+			color: 'Float32Array',
+			uv: 'Float32Array'
+		};
+
+	}
+
+	setDecoderPath( path ) {
+
+		this.decoderPath = path;
+
+		return this;
+
+	}
+
+	setDecoderConfig( config ) {
+
+		this.decoderConfig = config;
+
+		return this;
+
+	}
+
+	setWorkerLimit( workerLimit ) {
+
+		this.workerLimit = workerLimit;
+
+		return this;
+
+	}
+
+	load( url, onLoad, onProgress, onError ) {
+
+		const loader = new three__WEBPACK_IMPORTED_MODULE_0__.FileLoader( this.manager );
+
+		loader.setPath( this.path );
+		loader.setResponseType( 'arraybuffer' );
+		loader.setRequestHeader( this.requestHeader );
+		loader.setWithCredentials( this.withCredentials );
+
+		loader.load( url, ( buffer ) => {
+
+			this.decodeDracoFile( buffer, onLoad ).catch( onError );
+
+		}, onProgress, onError );
+
+	}
+
+	decodeDracoFile( buffer, callback, attributeIDs, attributeTypes ) {
+
+		const taskConfig = {
+			attributeIDs: attributeIDs || this.defaultAttributeIDs,
+			attributeTypes: attributeTypes || this.defaultAttributeTypes,
+			useUniqueIDs: !! attributeIDs
+		};
+
+		return this.decodeGeometry( buffer, taskConfig ).then( callback );
+
+	}
+
+	decodeGeometry( buffer, taskConfig ) {
+
+		const taskKey = JSON.stringify( taskConfig );
+
+		// Check for an existing task using this buffer. A transferred buffer cannot be transferred
+		// again from this thread.
+		if ( _taskCache.has( buffer ) ) {
+
+			const cachedTask = _taskCache.get( buffer );
+
+			if ( cachedTask.key === taskKey ) {
+
+				return cachedTask.promise;
+
+			} else if ( buffer.byteLength === 0 ) {
+
+				// Technically, it would be possible to wait for the previous task to complete,
+				// transfer the buffer back, and decode again with the second configuration. That
+				// is complex, and I don't know of any reason to decode a Draco buffer twice in
+				// different ways, so this is left unimplemented.
+				throw new Error(
+
+					'THREE.DRACOLoader: Unable to re-decode a buffer with different ' +
+					'settings. Buffer has already been transferred.'
+
+				);
+
+			}
+
+		}
+
+		//
+
+		let worker;
+		const taskID = this.workerNextTaskID ++;
+		const taskCost = buffer.byteLength;
+
+		// Obtain a worker and assign a task, and construct a geometry instance
+		// when the task completes.
+		const geometryPending = this._getWorker( taskID, taskCost )
+			.then( ( _worker ) => {
+
+				worker = _worker;
+
+				return new Promise( ( resolve, reject ) => {
+
+					worker._callbacks[ taskID ] = { resolve, reject };
+
+					worker.postMessage( { type: 'decode', id: taskID, taskConfig, buffer }, [ buffer ] );
+
+					// this.debug();
+
+				} );
+
+			} )
+			.then( ( message ) => this._createGeometry( message.geometry ) );
+
+		// Remove task from the task list.
+		// Note: replaced '.finally()' with '.catch().then()' block - iOS 11 support (#19416)
+		geometryPending
+			.catch( () => true )
+			.then( () => {
+
+				if ( worker && taskID ) {
+
+					this._releaseTask( worker, taskID );
+
+					// this.debug();
+
+				}
+
+			} );
+
+		// Cache the task result.
+		_taskCache.set( buffer, {
+
+			key: taskKey,
+			promise: geometryPending
+
+		} );
+
+		return geometryPending;
+
+	}
+
+	_createGeometry( geometryData ) {
+
+		const geometry = new three__WEBPACK_IMPORTED_MODULE_0__.BufferGeometry();
+
+		if ( geometryData.index ) {
+
+			geometry.setIndex( new three__WEBPACK_IMPORTED_MODULE_0__.BufferAttribute( geometryData.index.array, 1 ) );
+
+		}
+
+		for ( let i = 0; i < geometryData.attributes.length; i ++ ) {
+
+			const attribute = geometryData.attributes[ i ];
+			const name = attribute.name;
+			const array = attribute.array;
+			const itemSize = attribute.itemSize;
+
+			geometry.setAttribute( name, new three__WEBPACK_IMPORTED_MODULE_0__.BufferAttribute( array, itemSize ) );
+
+		}
+
+		return geometry;
+
+	}
+
+	_loadLibrary( url, responseType ) {
+
+		const loader = new three__WEBPACK_IMPORTED_MODULE_0__.FileLoader( this.manager );
+		loader.setPath( this.decoderPath );
+		loader.setResponseType( responseType );
+		loader.setWithCredentials( this.withCredentials );
+
+		return new Promise( ( resolve, reject ) => {
+
+			loader.load( url, resolve, undefined, reject );
+
+		} );
+
+	}
+
+	preload() {
+
+		this._initDecoder();
+
+		return this;
+
+	}
+
+	_initDecoder() {
+
+		if ( this.decoderPending ) return this.decoderPending;
+
+		const useJS = typeof WebAssembly !== 'object' || this.decoderConfig.type === 'js';
+		const librariesPending = [];
+
+		if ( useJS ) {
+
+			librariesPending.push( this._loadLibrary( 'draco_decoder.js', 'text' ) );
+
+		} else {
+
+			librariesPending.push( this._loadLibrary( 'draco_wasm_wrapper.js', 'text' ) );
+			librariesPending.push( this._loadLibrary( 'draco_decoder.wasm', 'arraybuffer' ) );
+
+		}
+
+		this.decoderPending = Promise.all( librariesPending )
+			.then( ( libraries ) => {
+
+				const jsContent = libraries[ 0 ];
+
+				if ( ! useJS ) {
+
+					this.decoderConfig.wasmBinary = libraries[ 1 ];
+
+				}
+
+				const fn = DRACOWorker.toString();
+
+				const body = [
+					'/* draco decoder */',
+					jsContent,
+					'',
+					'/* worker */',
+					fn.substring( fn.indexOf( '{' ) + 1, fn.lastIndexOf( '}' ) )
+				].join( '\n' );
+
+				this.workerSourceURL = URL.createObjectURL( new Blob( [ body ] ) );
+
+			} );
+
+		return this.decoderPending;
+
+	}
+
+	_getWorker( taskID, taskCost ) {
+
+		return this._initDecoder().then( () => {
+
+			if ( this.workerPool.length < this.workerLimit ) {
+
+				const worker = new Worker( this.workerSourceURL );
+
+				worker._callbacks = {};
+				worker._taskCosts = {};
+				worker._taskLoad = 0;
+
+				worker.postMessage( { type: 'init', decoderConfig: this.decoderConfig } );
+
+				worker.onmessage = function ( e ) {
+
+					const message = e.data;
+
+					switch ( message.type ) {
+
+						case 'decode':
+							worker._callbacks[ message.id ].resolve( message );
+							break;
+
+						case 'error':
+							worker._callbacks[ message.id ].reject( message );
+							break;
+
+						default:
+							console.error( 'THREE.DRACOLoader: Unexpected message, "' + message.type + '"' );
+
+					}
+
+				};
+
+				this.workerPool.push( worker );
+
+			} else {
+
+				this.workerPool.sort( function ( a, b ) {
+
+					return a._taskLoad > b._taskLoad ? - 1 : 1;
+
+				} );
+
+			}
+
+			const worker = this.workerPool[ this.workerPool.length - 1 ];
+			worker._taskCosts[ taskID ] = taskCost;
+			worker._taskLoad += taskCost;
+			return worker;
+
+		} );
+
+	}
+
+	_releaseTask( worker, taskID ) {
+
+		worker._taskLoad -= worker._taskCosts[ taskID ];
+		delete worker._callbacks[ taskID ];
+		delete worker._taskCosts[ taskID ];
+
+	}
+
+	debug() {
+
+		console.log( 'Task load: ', this.workerPool.map( ( worker ) => worker._taskLoad ) );
+
+	}
+
+	dispose() {
+
+		for ( let i = 0; i < this.workerPool.length; ++ i ) {
+
+			this.workerPool[ i ].terminate();
+
+		}
+
+		this.workerPool.length = 0;
+
+		return this;
+
+	}
+
+}
+
+/* WEB WORKER */
+
+function DRACOWorker() {
+
+	let decoderConfig;
+	let decoderPending;
+
+	onmessage = function ( e ) {
+
+		const message = e.data;
+
+		switch ( message.type ) {
+
+			case 'init':
+				decoderConfig = message.decoderConfig;
+				decoderPending = new Promise( function ( resolve/*, reject*/ ) {
+
+					decoderConfig.onModuleLoaded = function ( draco ) {
+
+						// Module is Promise-like. Wrap before resolving to avoid loop.
+						resolve( { draco: draco } );
+
+					};
+
+					DracoDecoderModule( decoderConfig ); // eslint-disable-line no-undef
+
+				} );
+				break;
+
+			case 'decode':
+				const buffer = message.buffer;
+				const taskConfig = message.taskConfig;
+				decoderPending.then( ( module ) => {
+
+					const draco = module.draco;
+					const decoder = new draco.Decoder();
+					const decoderBuffer = new draco.DecoderBuffer();
+					decoderBuffer.Init( new Int8Array( buffer ), buffer.byteLength );
+
+					try {
+
+						const geometry = decodeGeometry( draco, decoder, decoderBuffer, taskConfig );
+
+						const buffers = geometry.attributes.map( ( attr ) => attr.array.buffer );
+
+						if ( geometry.index ) buffers.push( geometry.index.array.buffer );
+
+						self.postMessage( { type: 'decode', id: message.id, geometry }, buffers );
+
+					} catch ( error ) {
+
+						console.error( error );
+
+						self.postMessage( { type: 'error', id: message.id, error: error.message } );
+
+					} finally {
+
+						draco.destroy( decoderBuffer );
+						draco.destroy( decoder );
+
+					}
+
+				} );
+				break;
+
+		}
+
+	};
+
+	function decodeGeometry( draco, decoder, decoderBuffer, taskConfig ) {
+
+		const attributeIDs = taskConfig.attributeIDs;
+		const attributeTypes = taskConfig.attributeTypes;
+
+		let dracoGeometry;
+		let decodingStatus;
+
+		const geometryType = decoder.GetEncodedGeometryType( decoderBuffer );
+
+		if ( geometryType === draco.TRIANGULAR_MESH ) {
+
+			dracoGeometry = new draco.Mesh();
+			decodingStatus = decoder.DecodeBufferToMesh( decoderBuffer, dracoGeometry );
+
+		} else if ( geometryType === draco.POINT_CLOUD ) {
+
+			dracoGeometry = new draco.PointCloud();
+			decodingStatus = decoder.DecodeBufferToPointCloud( decoderBuffer, dracoGeometry );
+
+		} else {
+
+			throw new Error( 'THREE.DRACOLoader: Unexpected geometry type.' );
+
+		}
+
+		if ( ! decodingStatus.ok() || dracoGeometry.ptr === 0 ) {
+
+			throw new Error( 'THREE.DRACOLoader: Decoding failed: ' + decodingStatus.error_msg() );
+
+		}
+
+		const geometry = { index: null, attributes: [] };
+
+		// Gather all vertex attributes.
+		for ( const attributeName in attributeIDs ) {
+
+			const attributeType = self[ attributeTypes[ attributeName ] ];
+
+			let attribute;
+			let attributeID;
+
+			// A Draco file may be created with default vertex attributes, whose attribute IDs
+			// are mapped 1:1 from their semantic name (POSITION, NORMAL, ...). Alternatively,
+			// a Draco file may contain a custom set of attributes, identified by known unique
+			// IDs. glTF files always do the latter, and `.drc` files typically do the former.
+			if ( taskConfig.useUniqueIDs ) {
+
+				attributeID = attributeIDs[ attributeName ];
+				attribute = decoder.GetAttributeByUniqueId( dracoGeometry, attributeID );
+
+			} else {
+
+				attributeID = decoder.GetAttributeId( dracoGeometry, draco[ attributeIDs[ attributeName ] ] );
+
+				if ( attributeID === - 1 ) continue;
+
+				attribute = decoder.GetAttribute( dracoGeometry, attributeID );
+
+			}
+
+			geometry.attributes.push( decodeAttribute( draco, decoder, dracoGeometry, attributeName, attributeType, attribute ) );
+
+		}
+
+		// Add index.
+		if ( geometryType === draco.TRIANGULAR_MESH ) {
+
+			geometry.index = decodeIndex( draco, decoder, dracoGeometry );
+
+		}
+
+		draco.destroy( dracoGeometry );
+
+		return geometry;
+
+	}
+
+	function decodeIndex( draco, decoder, dracoGeometry ) {
+
+		const numFaces = dracoGeometry.num_faces();
+		const numIndices = numFaces * 3;
+		const byteLength = numIndices * 4;
+
+		const ptr = draco._malloc( byteLength );
+		decoder.GetTrianglesUInt32Array( dracoGeometry, byteLength, ptr );
+		const index = new Uint32Array( draco.HEAPF32.buffer, ptr, numIndices ).slice();
+		draco._free( ptr );
+
+		return { array: index, itemSize: 1 };
+
+	}
+
+	function decodeAttribute( draco, decoder, dracoGeometry, attributeName, attributeType, attribute ) {
+
+		const numComponents = attribute.num_components();
+		const numPoints = dracoGeometry.num_points();
+		const numValues = numPoints * numComponents;
+		const byteLength = numValues * attributeType.BYTES_PER_ELEMENT;
+		const dataType = getDracoDataType( draco, attributeType );
+
+		const ptr = draco._malloc( byteLength );
+		decoder.GetAttributeDataArrayForAllPoints( dracoGeometry, attribute, dataType, byteLength, ptr );
+		const array = new attributeType( draco.HEAPF32.buffer, ptr, numValues ).slice();
+		draco._free( ptr );
+
+		return {
+			name: attributeName,
+			array: array,
+			itemSize: numComponents
+		};
+
+	}
+
+	function getDracoDataType( draco, attributeType ) {
+
+		switch ( attributeType ) {
+
+			case Float32Array: return draco.DT_FLOAT32;
+			case Int8Array: return draco.DT_INT8;
+			case Int16Array: return draco.DT_INT16;
+			case Int32Array: return draco.DT_INT32;
+			case Uint8Array: return draco.DT_UINT8;
+			case Uint16Array: return draco.DT_UINT16;
+			case Uint32Array: return draco.DT_UINT32;
+
+		}
+
+	}
+
+}
+
+
+
+
+/***/ }),
+/* 4 */
+/***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
+
+__webpack_require__.r(__webpack_exports__);
+/* harmony export */ __webpack_require__.d(__webpack_exports__, {
 /* harmony export */   "GLTFLoader": () => (/* binding */ GLTFLoader)
 /* harmony export */ });
 /* harmony import */ var three__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(2);
@@ -54702,7 +55269,7 @@ function toTrianglesDrawMode( geometry, drawMode ) {
 
 
 /***/ }),
-/* 4 */
+/* 5 */
 /***/ ((__unused_webpack___webpack_module__, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -55953,7 +56520,7 @@ class MapControls extends OrbitControls {
 
 
 /***/ }),
-/* 5 */
+/* 6 */
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -55984,8 +56551,8 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "default": () => (/* binding */ gsapWithCSS),
 /* harmony export */   "gsap": () => (/* binding */ gsapWithCSS)
 /* harmony export */ });
-/* harmony import */ var _gsap_core_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(6);
-/* harmony import */ var _CSSPlugin_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(7);
+/* harmony import */ var _gsap_core_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7);
+/* harmony import */ var _CSSPlugin_js__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(8);
 
 
 var gsapWithCSS = _gsap_core_js__WEBPACK_IMPORTED_MODULE_0__.gsap.registerPlugin(_CSSPlugin_js__WEBPACK_IMPORTED_MODULE_1__.CSSPlugin) || _gsap_core_js__WEBPACK_IMPORTED_MODULE_0__.gsap,
@@ -55994,7 +56561,7 @@ TweenMaxWithCSS = gsapWithCSS.core.Tween;
 
 
 /***/ }),
-/* 6 */
+/* 7 */
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -60506,7 +61073,7 @@ var Power0 = _easeMap.Power0,
 
 
 /***/ }),
-/* 7 */
+/* 8 */
 /***/ ((__unused_webpack_module, __webpack_exports__, __webpack_require__) => {
 
 __webpack_require__.r(__webpack_exports__);
@@ -60517,7 +61084,7 @@ __webpack_require__.r(__webpack_exports__);
 /* harmony export */   "checkPrefix": () => (/* binding */ _checkPropPrefix),
 /* harmony export */   "default": () => (/* binding */ CSSPlugin)
 /* harmony export */ });
-/* harmony import */ var _gsap_core_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(6);
+/* harmony import */ var _gsap_core_js__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(7);
 /*!
  * CSSPlugin 3.11.3
  * https://greensock.com
@@ -62127,9 +62694,10 @@ var __webpack_exports__ = {};
 __webpack_require__.r(__webpack_exports__);
 /* harmony import */ var _styles_css__WEBPACK_IMPORTED_MODULE_0__ = __webpack_require__(1);
 /* harmony import */ var three__WEBPACK_IMPORTED_MODULE_1__ = __webpack_require__(2);
-/* harmony import */ var gsap__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(5);
-/* harmony import */ var three_examples_jsm_loaders_GLTFLoader_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3);
-/* harmony import */ var three_examples_jsm_controls_OrbitControls_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4);
+/* harmony import */ var gsap__WEBPACK_IMPORTED_MODULE_5__ = __webpack_require__(6);
+/* harmony import */ var three_examples_jsm_loaders_GLTFLoader_js__WEBPACK_IMPORTED_MODULE_3__ = __webpack_require__(4);
+/* harmony import */ var three_examples_jsm_controls_OrbitControls_js__WEBPACK_IMPORTED_MODULE_4__ = __webpack_require__(5);
+/* harmony import */ var three_examples_jsm_loaders_DRACOloader_js__WEBPACK_IMPORTED_MODULE_2__ = __webpack_require__(3);
 function _createForOfIteratorHelper(o, allowArrayLike) { var it = typeof Symbol !== "undefined" && o[Symbol.iterator] || o["@@iterator"]; if (!it) { if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") { if (it) o = it; var i = 0; var F = function F() {}; return { s: F, n: function n() { if (i >= o.length) return { done: true }; return { done: false, value: o[i++] }; }, e: function e(_e) { throw _e; }, f: F }; } throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); } var normalCompletion = true, didErr = false, err; return { s: function s() { it = it.call(o); }, n: function n() { var step = it.next(); normalCompletion = step.done; return step; }, e: function e(_e2) { didErr = true; err = _e2; }, f: function f() { try { if (!normalCompletion && it["return"] != null) it["return"](); } finally { if (didErr) throw err; } } }; }
 function _toConsumableArray(arr) { return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread(); }
 function _nonIterableSpread() { throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method."); }
@@ -62137,6 +62705,7 @@ function _unsupportedIterableToArray(o, minLen) { if (!o) return; if (typeof o =
 function _iterableToArray(iter) { if (typeof Symbol !== "undefined" && iter[Symbol.iterator] != null || iter["@@iterator"] != null) return Array.from(iter); }
 function _arrayWithoutHoles(arr) { if (Array.isArray(arr)) return _arrayLikeToArray(arr); }
 function _arrayLikeToArray(arr, len) { if (len == null || len > arr.length) len = arr.length; for (var i = 0, arr2 = new Array(len); i < len; i++) { arr2[i] = arr[i]; } return arr2; }
+
 
 
 
@@ -62152,7 +62721,10 @@ scene.fog = new three__WEBPACK_IMPORTED_MODULE_1__.Fog(0x182857, 10, 15);
 
 //MODELS
 
-var gltfLoader = new three_examples_jsm_loaders_GLTFLoader_js__WEBPACK_IMPORTED_MODULE_2__.GLTFLoader();
+var dracoLoader = new three_examples_jsm_loaders_DRACOloader_js__WEBPACK_IMPORTED_MODULE_2__.DRACOLoader();
+dracoLoader.setDecoderPath('/draco/');
+var gltfLoader = new three_examples_jsm_loaders_GLTFLoader_js__WEBPACK_IMPORTED_MODULE_3__.GLTFLoader();
+gltfLoader.setDRACOLoader(dracoLoader);
 gltfLoader.load('./models/base.glb', function (gltf) {
   var base = gltf.scene;
   base.position.set(0, -1, 0);
@@ -62172,23 +62744,14 @@ gltfLoader.load('./models/base.glb', function (gltf) {
   }
   scene.add(base);
 });
-gltfLoader.load('./models/objects.glb', function (gltf) {
+gltfLoader.load('./models/objetos_draco.gltf', function (gltf) {
   var objects = gltf.scene;
-  //    objects.castShadow = true
-  //    objects.receiveShadow = true
   objects.position.set(0, -1, 0);
   gltf.scene.traverse(function (child) {
     if (child.isMesh) {
       child.castShadow = true;
     }
   });
-
-  //    const children1 = [...objects.children]
-
-  //    for(const child of children1)
-  //    {
-  //        child.castShadow = true
-  //    }
   scene.add(objects);
 });
 var piso_g = new three__WEBPACK_IMPORTED_MODULE_1__.PlaneGeometry(50, 50);
@@ -62226,7 +62789,7 @@ scene.add(camera);
 
 //CONTROLS
 
-var controls = new three_examples_jsm_controls_OrbitControls_js__WEBPACK_IMPORTED_MODULE_3__.OrbitControls(camera, canvas);
+var controls = new three_examples_jsm_controls_OrbitControls_js__WEBPACK_IMPORTED_MODULE_4__.OrbitControls(camera, canvas);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 controls.enablePan = true;
@@ -62275,7 +62838,7 @@ container.addEventListener('click', function (event) {
 
     if (model.material.name === 'virgen' || model.material.name === 'marco') {
       text0.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-0", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-0", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62286,7 +62849,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'picado1' || model.material.name === 'picado2' || model.material.name === 'picado3' || model.material.name === 'picado4') {
       text1.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-1", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-1", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62297,7 +62860,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'petalo') {
       text2.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-2", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-2", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62308,7 +62871,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'purgatorio' || model.material.name === 'marco p') {
       text3.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-3", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-3", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62319,7 +62882,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'fuego' || model.material.name === 'pabilo' || model.material.name === 'vidrio' || model.material.name === 'cera') {
       text4.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-4", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-4", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62330,7 +62893,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'techo' || model.material.name === 'defensa' || model.material.name === 'ruedas' || model.material.name === 'balero_b' || model.material.name === 'balero_a' || model.material.name === 'balero_ama' || model.material.name === 'balero_v' || model.material.name === 'balero_r' || model.material.name === 'madera_balero' || model.material.name === 'aro_balero') {
       text5.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-5", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-5", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62341,7 +62904,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'sal' || model.material.name === 'plato_sal') {
       text6.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-6", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-6", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62352,7 +62915,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'pan') {
       text7.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-7", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-7", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62363,7 +62926,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'calavera_a' || model.material.name === 'calavera_b' || model.material.name === 'calavera_m' || model.material.name === 'calavera_r') {
       text8.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-8", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-8", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62374,7 +62937,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'mandarina_n' || model.material.name === 'plato' || model.material.name === 'mole' || model.material.name === 'arroz' || model.material.name === 'naranja' || model.material.name === 'caña_v') {
       text9.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-9", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-9", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62385,7 +62948,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'difunto' || model.material.name === 'marco d') {
       text10.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-10", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-10", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62396,7 +62959,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'cruz') {
       text11.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-11", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-11", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62407,7 +62970,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'sahumerio') {
       text12.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-12", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-12", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62418,7 +62981,7 @@ container.addEventListener('click', function (event) {
     }
     if (model.material.name === 'cruz_piso') {
       text13.style.display = "flex";
-      gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-13", {
+      gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-13", {
         duration: 0.5,
         y: 0,
         ease: "sine.inOut",
@@ -62449,7 +63012,7 @@ orange.position.set(-0.8, 1, 1);
 scene.add(orange);
 var blue = new three__WEBPACK_IMPORTED_MODULE_1__.PointLight('#e8a738', 15, 100);
 blue.position.set(0.8, 0.5, 1);
-//scene.add( blue );
+scene.add(blue);
 
 //  const o_point = new THREE.PointLightHelper(orange,1)
 //  const b_point = new THREE.PointLightHelper(blue,1)
@@ -62484,7 +63047,7 @@ var button0 = document.querySelector('.button0');
 button0.onclick = function () {
   var div = document.querySelector('.point-0');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-0", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-0", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62499,7 +63062,7 @@ var button1 = document.querySelector('.button1');
 button1.onclick = function () {
   var div = document.querySelector('.point-1');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-1", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-1", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62514,7 +63077,7 @@ var button2 = document.querySelector('.button2');
 button2.onclick = function () {
   var div = document.querySelector('.point-2');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-2", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-2", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62529,7 +63092,7 @@ var button3 = document.querySelector('.button3');
 button3.onclick = function () {
   var div = document.querySelector('.point-3');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-3", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-3", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62544,7 +63107,7 @@ var button4 = document.querySelector('.button4');
 button4.onclick = function () {
   var div = document.querySelector('.point-4');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-4", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-4", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62559,7 +63122,7 @@ var button5 = document.querySelector('.button5');
 button5.onclick = function () {
   var div = document.querySelector('.point-5');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-5", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-5", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62574,7 +63137,7 @@ var button6 = document.querySelector('.button6');
 button6.onclick = function () {
   var div = document.querySelector('.point-6');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-6", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-6", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62589,7 +63152,7 @@ var button7 = document.querySelector('.button7');
 button7.onclick = function () {
   var div = document.querySelector('.point-7');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-7", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-7", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62604,7 +63167,7 @@ var button8 = document.querySelector('.button8');
 button8.onclick = function () {
   var div = document.querySelector('.point-8');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-8", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-8", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62619,7 +63182,7 @@ var button9 = document.querySelector('.button9');
 button9.onclick = function () {
   var div = document.querySelector('.point-9');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-9", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-9", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62634,7 +63197,7 @@ var button10 = document.querySelector('.button10');
 button10.onclick = function () {
   var div = document.querySelector('.point-10');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-10", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-10", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62649,7 +63212,7 @@ var button11 = document.querySelector('.button11');
 button11.onclick = function () {
   var div = document.querySelector('.point-11');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-11", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-11", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62664,7 +63227,7 @@ var button12 = document.querySelector('.button12');
 button12.onclick = function () {
   var div = document.querySelector('.point-12');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-12", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-12", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62679,7 +63242,7 @@ var button13 = document.querySelector('.button13');
 button13.onclick = function () {
   var div = document.querySelector('.point-13');
   if (div.style.display !== "none") {
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-13", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".point-13", {
       duration: 0.5,
       y: 200,
       ease: "sine.inOut",
@@ -62695,7 +63258,7 @@ button_i.onclick = function () {
   var div = document.querySelector('.instrucciones');
   if (div.style.display !== "none") {
     //div.style.display = "none"
-    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".instrucciones", {
+    gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.to(".instrucciones", {
       duration: 0.5,
       y: 100,
       ease: "sine.inOut",
@@ -62706,7 +63269,7 @@ button_i.onclick = function () {
     div.style.display = "flex";
   }
 };
-var mm = gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.matchMedia();
+var mm = gsap__WEBPACK_IMPORTED_MODULE_5__.gsap.matchMedia();
 mm.add("(max-width: 500px)", function () {});
 mm.add("((min-width: 501px) and (max-width: 912px))", function () {});
 mm.add("(max-width: 500px)", function () {});
