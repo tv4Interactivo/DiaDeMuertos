@@ -62173,6 +62173,7 @@ gltfLoader.load('./models/base.glb', function (gltf) {
   }
   scene.add(base);
 });
+var objetos = [];
 gltfLoader.load('./models/objetos2_.glb', function (gltf) {
   var objects = gltf.scene;
   objects.position.set(0, -1, 0);
@@ -62181,6 +62182,7 @@ gltfLoader.load('./models/objetos2_.glb', function (gltf) {
       child.castShadow = true;
     }
   });
+  objetos.push(objects);
   scene.add(objects);
 });
 var piso_g = new three__WEBPACK_IMPORTED_MODULE_1__.PlaneGeometry(30, 30);
@@ -62232,6 +62234,7 @@ controls.maxAzimuthAngle = Math.PI * 0.3;
 
 var raycaster = new three__WEBPACK_IMPORTED_MODULE_1__.Raycaster();
 var mouse = new three__WEBPACK_IMPORTED_MODULE_1__.Vector2();
+var point = document.querySelector('.point');
 var text0 = document.querySelector('.point-0');
 var text1 = document.querySelector('.point-1');
 var text2 = document.querySelector('.point-2');
@@ -62260,11 +62263,13 @@ container.addEventListener('click', function (event) {
   mouse.x = event.clientX / sizes.width * 2 - 1;
   mouse.y = -(event.clientY / sizes.height * 2 - 1);
   raycaster.setFromCamera(mouse, camera);
-  var found = raycaster.intersectObjects(scene.children);
+  var found = raycaster.intersectObjects(objetos);
   if (found.length > 0) {
     model = found[0].object;
-    //console.log(model.material.name)
-
+    console.log(model.material.name);
+    if (model.material.name == null) {
+      found.length == 0;
+    }
     if (model.material.name === 'virgen' || model.material.name === 'marco') {
       text0.style.display = "flex";
       gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-0", {
@@ -62419,6 +62424,107 @@ container.addEventListener('click', function (event) {
     } else {
       text13.style.display = "none";
     }
+  }
+  if (found.length <= 0) {
+    //point.style.display = "none"
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-0", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-1", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-2", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-3", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-4", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-5", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-6", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-7", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-8", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-9", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-10", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-11", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-12", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".point-13", {
+      duration: 0.5,
+      y: 200,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
   }
 });
 
