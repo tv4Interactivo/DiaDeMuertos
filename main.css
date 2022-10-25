@@ -25,11 +25,15 @@ html,body{
     height: auto;
 }
 
+.titulo{
+    width: 30%;
+}
+
 .instrucciones{
     position: absolute;
     z-index: 2;
     width: 70%;
-    height: 80%;
+    height: 90%;
     top: 50%;
     left: 50%;
     transform: translate(-50%,-50%);
@@ -39,22 +43,20 @@ html,body{
     font-family: 'M PLUS Rounded 1c', sans-serif;
     display: flex;
     flex-direction: column;
-    justify-content: space-around;
+    justify-content: space-between;
     align-items: center;
     padding: 3rem 1rem;
 }
 
 .header{
-    display: flex;
-    flex-direction: row;
-    align-items:center;
-    justify-content:center;
+    display: block;
+    text-align: center;
     width: 100%;
     padding: 0 4rem;
 }
 
 .cerrar{
-    width: 10%;
+    width: 80%;
 }
 
 .inst{
@@ -64,15 +66,19 @@ html,body{
 
 .inst1{
     display: flex;
-    flex-direction: row;
+    flex-direction: column;
     align-items: center;
-    justify-content: space-around;
+    justify-content:center;
 }
 
 .scroll{
-    width: 30%;
+    width: 40%;
+    display: flex;
 }
 
+.hand{
+    display: none;
+}
 
 .point{
     text-align: center;
@@ -97,6 +103,10 @@ html,body{
     transform: translate(-50%,200px);
 }
 
+h2{
+    font-size: 1.3rem;
+}
+
 .label{
     font-size: 2rem;
     font-weight: 600;
@@ -115,9 +125,16 @@ html,body{
 }
 
 .button-i{
-    background: none;
-    border: none;
+    background-color: #7f6009;
+    padding: 1rem;
+    border-radius: 10px;
     text-align: center;
+    border: none;
+    width: 5%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
 }
 
 
@@ -142,6 +159,10 @@ html,body{
 
 @media screen and (max-width: 500px){
 
+    .titulo{
+        width: 100%;
+    }
+
     .img-info{
         width: 15%;
         top: 2%;
@@ -149,31 +170,40 @@ html,body{
     }
 
     .instrucciones{
-        width: 90%;
-        height: 90%;
-        padding: 0;
-        justify-content: space-evenly;
+        width: calc(100vw - 24px - 20px - 20px);
+        height: calc(100vh - 24px - 40px - 40px);
+        padding: 2rem 0;
+        display: block;
+        text-align: center;
+        overflow: scroll;
     }
 
     .cerrar{
-        width: 10%;
+        width: 30%;
     }
 
-    .header{
-        padding: 0;
-    }
-
-    .instrucciones{
-        padding: 1rem;
+    .text-i{
+        padding: 2rem;
     }
 
     .inst{
         flex-direction: column;
         justify-content: space-around;
+        margin: 2rem;
     }
 
     .inst1{
         padding: 0.5rem;
+        flex-direction: row;
+    }
+
+    .scroll{
+        display: none;
+    }
+
+    .hand{
+        display: flex;
+        width: 50%;
     }
 
     .point{
@@ -188,6 +218,12 @@ html,body{
         right: 1%;
         width: 15%;
         height: auto;
+    }
+
+    .button-i{
+        display: inline-flex;
+        padding: 1rem 0;
+        width: 20%;
     }
 }
 

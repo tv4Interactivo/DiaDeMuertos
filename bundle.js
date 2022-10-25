@@ -62266,7 +62266,8 @@ container.addEventListener('click', function (event) {
   var found = raycaster.intersectObjects(objetos);
   if (found.length > 0) {
     model = found[0].object;
-    console.log(model.material.name);
+    //console.log(model.material.name)
+
     if (model.material.name == null) {
       found.length == 0;
     }
@@ -62804,8 +62805,8 @@ button_i.onclick = function () {
     div.style.display = "flex";
   }
 };
-var button_i = document.querySelector('.btn-info');
-button_i.onclick = function () {
+var button_info = document.querySelector('.btn-info');
+button_info.onclick = function () {
   var div = document.querySelector('.instrucciones');
   if (div.style.display !== "flex") {
     //div.style.display = "none"
@@ -62813,11 +62814,24 @@ button_i.onclick = function () {
       duration: 0.5,
       y: 0,
       ease: "sine.inOut",
-      "display": "flex",
+      "display": "block",
       "opacity": "1"
     });
   }
 };
+document.addEventListener('click', function handleClick(event) {
+  var box = document.querySelector('.instrucciones');
+  var b_info = document.querySelector('.btn-info');
+  if (!box.contains(event.target) && !b_info.contains(event.target)) {
+    gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.to(".instrucciones", {
+      duration: 0.5,
+      y: 100,
+      ease: "sine.inOut",
+      "display": "none",
+      "opacity": "0"
+    });
+  }
+});
 var mm = gsap__WEBPACK_IMPORTED_MODULE_4__.gsap.matchMedia();
 mm.add("(max-width: 500px)", function () {});
 mm.add("((min-width: 501px) and (max-width: 912px))", function () {});
