@@ -62814,7 +62814,7 @@ button_info.onclick = function () {
       duration: 0.5,
       y: 0,
       ease: "sine.inOut",
-      "display": "block",
+      "display": "flex",
       "opacity": "1"
     });
   }

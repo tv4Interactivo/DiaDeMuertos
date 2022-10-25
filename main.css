@@ -173,7 +173,7 @@ h2{
         width: calc(100vw - 24px - 20px - 20px);
         height: calc(100vh - 24px - 40px - 40px);
         padding: 2rem 0;
-        display: block;
+        display: flex;
         text-align: center;
         overflow: scroll;
     }
@@ -221,7 +221,6 @@ h2{
     }
 
     .button-i{
-        display: inline-flex;
         padding: 1rem 0;
         width: 20%;
     }
