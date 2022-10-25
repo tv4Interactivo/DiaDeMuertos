@@ -62195,6 +62195,10 @@ piso.rotation.x = -Math.PI / 2;
 piso.receiveShadow = true;
 scene.add(piso);
 
+//TEXTURES
+var textureLoader = new three__WEBPACK_IMPORTED_MODULE_1__.TextureLoader();
+var smokeTexture = textureLoader.load('./static/images/3.png');
+
 //SIZES
 
 var sizes = {
@@ -62572,7 +62576,9 @@ renderer.shadowMap.type = three__WEBPACK_IMPORTED_MODULE_1__.PCFSoftShadowMap;
 //TICK
 
 var currentIntersect = null;
+var clock = new three__WEBPACK_IMPORTED_MODULE_1__.Clock();
 var tick = function tick() {
+  var elapsedTime = clock.getElapsedTime();
   controls.update();
   renderer.render(scene, camera);
   window.requestAnimationFrame(tick);
