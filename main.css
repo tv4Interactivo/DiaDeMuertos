@@ -227,6 +227,61 @@ h2{
 }
 
 @media screen and (min-width: 500px) and (max-width: 912px){
+    .titulo{
+        width: 80%;
+    }
 
+    .img-info{
+        width: 10%;
+        top: 1%;
+        right: 2%;
+    }
+
+    .instrucciones{
+        width: 90%;
+        height: 90%;
+    }
+
+    .img-logo{
+        width: 13%;
+        height: auto;
+        bottom: 1%;
+        right: 1%;
+    }
+
+    .text-i{
+        padding: 2rem;
+        font-size: 1.5rem;
+    }
+
+    .inst1 h2{
+        font-size: 1.5rem;
+    }
+
+    .scroll{
+        display: none;
+    }
+
+    .hand{
+        display: flex;
+        width: 60%;
+    }
+
+    .button-i{
+        padding: 1rem;
+        width: 10%;
+    }
+
+    .cerrar{
+        width: 70%;
+    }
+
+    .point{
+        width: 100%;
+    }
+
+    .text{
+        font-size: 1.5rem;
+    }
 }
 
