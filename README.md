@@ -3,4 +3,4 @@
 </br>
 -Da click en el siguiente link: 
 </br>
-https://tv4interactivo.github.io/DiaDeMuertos2022/
+https://tv4interactivo.github.io/DiaDeMuertos/
